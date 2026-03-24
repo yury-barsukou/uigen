@@ -42,11 +42,6 @@ jobs:
       - name: Generate Prisma client
         run: npx prisma generate
 
-      - name: Install GitHub Copilot CLI extension
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh extension install github/gh-copilot --force
-
       - name: Extract request prompt
         id: prompt
         env:
