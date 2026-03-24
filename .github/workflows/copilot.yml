@@ -1,0 +1,131 @@
+name: GitHub Copilot
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+  issues:
+    types: [opened, assigned]
+  pull_request_review:
+    types: [submitted]
+
+jobs:
+  copilot:
+    if: |
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@copilot')) ||
+      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@copilot')) ||
+      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@copilot')) ||
+      (github.event_name == 'issues' && (contains(github.event.issue.body, '@copilot') || contains(github.event.issue.title, '@copilot')))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+      actions: read # Required to read CI results on PRs
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Install GitHub Copilot CLI extension
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh extension install github/gh-copilot --force
+
+      - name: Extract request prompt
+        id: prompt
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          case "$GITHUB_EVENT_NAME" in
+            issue_comment|pull_request_review_comment)
+              PROMPT=$(jq -r '.comment.body' "$GITHUB_EVENT_PATH")
+              ;;
+            pull_request_review)
+              PROMPT=$(jq -r '.review.body' "$GITHUB_EVENT_PATH")
+              ;;
+            issues)
+              TITLE=$(jq -r '.issue.title' "$GITHUB_EVENT_PATH")
+              BODY=$(jq -r '.issue.body' "$GITHUB_EVENT_PATH")
+              PROMPT="$TITLE: $BODY"
+              ;;
+          esac
+
+          # Strip @copilot mention prefix
+          PROMPT=$(echo "$PROMPT" | sed 's/@copilot[[:space:]]*//')
+
+          # Write to file to safely pass multi-line content between steps
+          printf '%s' "$PROMPT" > /tmp/copilot_prompt.txt
+          echo "prompt_file=/tmp/copilot_prompt.txt" >> "$GITHUB_OUTPUT"
+
+      - name: Run GitHub Copilot CLI
+        id: copilot
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PROMPT=$(cat /tmp/copilot_prompt.txt)
+
+          # gh copilot explain is best for code/concept questions;
+          # gh copilot suggest is best for shell/git/gh commands.
+          # Heuristic: if the prompt looks like a "how do I" / command query use suggest,
+          # otherwise fall back to explain for general analysis.
+          if echo "$PROMPT" | grep -qiE '(how (do|can|to)|what command|run|execute|build|deploy|test|install)'; then
+            echo "## GitHub Copilot CLI Suggestion" > /tmp/copilot_response.md
+            echo "" >> /tmp/copilot_response.md
+            echo '```' >> /tmp/copilot_response.md
+            echo "$PROMPT" | gh copilot suggest -t shell 2>&1 >> /tmp/copilot_response.md || true
+            echo '```' >> /tmp/copilot_response.md
+          else
+            echo "## GitHub Copilot CLI Explanation" > /tmp/copilot_response.md
+            echo "" >> /tmp/copilot_response.md
+            echo "$PROMPT" | gh copilot explain 2>&1 >> /tmp/copilot_response.md || true
+          fi
+
+          # Append project context hint
+          echo "" >> /tmp/copilot_response.md
+          echo "---" >> /tmp/copilot_response.md
+          echo "_Processed by [GitHub Copilot CLI](https://docs.github.com/en/copilot/github-copilot-in-the-cli/about-github-copilot-in-the-cli) via the \`copilot.yml\` workflow._" >> /tmp/copilot_response.md
+
+      - name: Post Copilot response as comment
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          RESPONSE=$(cat /tmp/copilot_response.md)
+
+          case "$GITHUB_EVENT_NAME" in
+            issue_comment|issues)
+              ISSUE_NUMBER=$(jq -r '.issue.number // .comment.issue_url' "$GITHUB_EVENT_PATH" | grep -oE '[0-9]+$')
+              gh issue comment "$ISSUE_NUMBER" --body "$RESPONSE"
+              ;;
+            pull_request_review_comment|pull_request_review)
+              PR_NUMBER=$(jq -r '.pull_request.number // .review.pull_request_url' "$GITHUB_EVENT_PATH" | grep -oE '[0-9]+$')
+              gh pr comment "$PR_NUMBER" --body "$RESPONSE"
+              ;;
+          esac
+
+      # Optional: Configure the trigger phrase (default: @copilot)
+      # To change it, update every 'contains(..., '@copilot')' expression in the job condition above
+      # and the sed pattern in the "Extract request prompt" step.
+
+      # Optional: Trigger when a specific user is assigned to an issue
+      # Add this condition to the job `if`:
+      #   (github.event_name == 'issues' && github.event.action == 'assigned' && github.event.assignee.login == 'copilot-bot')
+
+      # Optional: Restrict which commands Copilot can suggest
+      # Extend the "Run GitHub Copilot CLI" step with allowlist logic, e.g.
+      #   | grep -E '^(npm|npx|git) ' to strip dangerous shell commands before posting
