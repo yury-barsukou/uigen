@@ -1,11 +1,12 @@
 import { anthropic } from "@ai-sdk/anthropic";
+import { createOpenAI } from "@ai-sdk/openai";
 import {
   LanguageModelV1,
   LanguageModelV1StreamPart,
   LanguageModelV1Message,
 } from "@ai-sdk/provider";
 
-const MODEL = "claude-haiku-4-5";
+const DEFAULT_MODEL = "claude-sonnet-4-5@20250929";
 
 export class MockLanguageModel implements LanguageModelV1 {
   readonly specificationVersion = "v1" as const;
@@ -507,12 +508,36 @@ export default function App() {
 }
 
 export function getLanguageModel() {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const dialApiKey = process.env.DIAL_API_KEY;
+  const dialEndpoint = process.env.DIAL_ENDPOINT;
+  const modelName = process.env.DIAL_MODEL;
 
-  if (!apiKey || apiKey.trim() === "") {
-    console.log("No ANTHROPIC_API_KEY found, using mock provider");
-    return new MockLanguageModel("mock-claude-sonnet-4-0");
+  if (dialApiKey && dialApiKey.trim() !== "" && dialEndpoint && dialEndpoint.trim() !== "") {
+    const model = modelName || DEFAULT_MODEL;
+    console.log(`Using EPAM DIAL provider at ${dialEndpoint} with model ${model}`);
+    // EPAM DIAL uses Azure-compatible auth: header "api-key" instead of
+    // "Authorization: Bearer". Use a custom fetch to swap the header and
+    // rewrite the path to the Azure deployment format:
+    //   {endpoint}/deployments/{model}/chat/completions
+    const dial = createOpenAI({
+      apiKey: dialApiKey,
+      baseURL: `${dialEndpoint}/deployments/${model}`,
+      fetch: async (url: RequestInfo | URL, init?: RequestInit) => {
+        const headers = new Headers(init?.headers);
+        headers.delete("authorization");
+        headers.set("api-key", dialApiKey);
+        return globalThis.fetch(url, { ...init, headers });
+      },
+    });
+    return dial(model);
   }
 
-  return anthropic(MODEL);
+  const anthropicApiKey = process.env.ANTHROPIC_API_KEY;
+  if (anthropicApiKey && anthropicApiKey.trim() !== "") {
+    console.log("Using Anthropic provider");
+    return anthropic(DEFAULT_MODEL);
+  }
+
+  console.log("No API key found, using mock provider");
+  return new MockLanguageModel("mock-claude-sonnet-4-0");
 }
