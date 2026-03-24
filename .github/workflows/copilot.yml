@@ -72,29 +72,25 @@ jobs:
         id: copilot
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COPILOT_MODEL: ${{ vars.COPILOT_MODEL || 'claude-haiku-4.5' }}
         run: |
-          PROMPT=$(cat /tmp/copilot_prompt.txt)
+          # Escape prompt: replace " with \", collapse newlines/carriage returns into spaces
+          PROMPT=$(cat /tmp/copilot_prompt.txt | tr '\r\n' '  ' | sed 's/"/\\"/g')
 
-          # gh copilot explain is best for code/concept questions;
-          # gh copilot suggest is best for shell/git/gh commands.
-          # Heuristic: if the prompt looks like a "how do I" / command query use suggest,
-          # otherwise fall back to explain for general analysis.
-          if echo "$PROMPT" | grep -qiE '(how (do|can|to)|what command|run|execute|build|deploy|test|install)'; then
-            echo "## GitHub Copilot CLI Suggestion" > /tmp/copilot_response.md
-            echo "" >> /tmp/copilot_response.md
-            echo '```' >> /tmp/copilot_response.md
-            echo "$PROMPT" | gh copilot suggest -t shell 2>&1 >> /tmp/copilot_response.md || true
-            echo '```' >> /tmp/copilot_response.md
-          else
-            echo "## GitHub Copilot CLI Explanation" > /tmp/copilot_response.md
-            echo "" >> /tmp/copilot_response.md
-            echo "$PROMPT" | gh copilot explain 2>&1 >> /tmp/copilot_response.md || true
-          fi
+          echo "## GitHub Copilot Response" > /tmp/copilot_response.md
+          echo "" >> /tmp/copilot_response.md
 
-          # Append project context hint
+          copilot -p "$PROMPT" \
+            --allow-all-tools \
+            --allow-all-paths \
+            -s \
+            --model "$COPILOT_MODEL" \
+            2>&1 >> /tmp/copilot_response.md
+
+          # Append footer
           echo "" >> /tmp/copilot_response.md
           echo "---" >> /tmp/copilot_response.md
-          echo "_Processed by [GitHub Copilot CLI](https://docs.github.com/en/copilot/github-copilot-in-the-cli/about-github-copilot-in-the-cli) via the \`copilot.yml\` workflow._" >> /tmp/copilot_response.md
+          echo "_Processed by GitHub Copilot CLI via the \`copilot.yml\` workflow (model: \`$COPILOT_MODEL\`)._" >> /tmp/copilot_response.md
 
       - name: Post Copilot response as comment
         env:
