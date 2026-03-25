@@ -93,7 +93,7 @@ jobs:
           # Copilot subscription access.
           GH_TOKEN: ""
           GITHUB_TOKEN: ""
-          COPILOT_MODEL: ${{ vars.COPILOT_MODEL || 'gpt-4.1' }}
+          COPILOT_MODEL: ${{ vars.COPILOT_MODEL || 'claude-haiku-4.5' }}
         run: |
           # Escape prompt: replace " with \", collapse newlines/carriage returns into spaces
           PROMPT=$(cat /tmp/copilot_prompt.txt | tr '\r\n' '  ' | sed 's/"/\\"/g')
