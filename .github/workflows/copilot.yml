@@ -108,8 +108,8 @@ jobs:
           # Escape prompt: replace " with \", collapse newlines/carriage returns into spaces
           PROMPT=$(cat /tmp/copilot_prompt.txt | tr '\r\n' '  ' | sed 's/"/\\"/g')
 
-          # Playwright MCP server config
-          PLAYWRIGHT_MCP_CONFIG='{"mcpServers":{"playwright":{"command":"npx","args":["@playwright/mcp@latest"]}}}'
+          # Playwright MCP server config — screenshots saved to /tmp/playwright-screenshots
+          PLAYWRIGHT_MCP_CONFIG='{"mcpServers":{"playwright":{"command":"npx","args":["@playwright/mcp@latest","--output-dir","/tmp/playwright-screenshots"]}}}'
 
           echo "## GitHub Copilot Response" > /tmp/copilot_response.md
           echo "" >> /tmp/copilot_response.md
@@ -136,6 +136,48 @@ jobs:
           echo "" >> /tmp/copilot_response.md
           echo "---" >> /tmp/copilot_response.md
           echo "_Processed by GitHub Copilot CLI via the \`copilot.yml\` workflow (model: \`$COPILOT_MODEL\`)._" >> /tmp/copilot_response.md
+
+      - name: Attach screenshots to response
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          SCREENSHOTS_DIR="/tmp/playwright-screenshots"
+          if ! ls "$SCREENSHOTS_DIR"/*.png 2>/dev/null | head -1 > /dev/null; then
+            echo "No screenshots found, skipping." >&2
+            exit 0
+          fi
+
+          # Push screenshots to dedicated orphan branch so they have a stable raw URL
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+
+          DEST_DIR="$GITHUB_RUN_ID"
+          TMP_GIT=$(mktemp -d)
+          cd "$TMP_GIT"
+          git init -q
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+
+          if git fetch origin ci-screenshots --depth=1 2>/dev/null; then
+            git checkout -b ci-screenshots FETCH_HEAD
+          else
+            git checkout --orphan ci-screenshots
+          fi
+
+          mkdir -p "$DEST_DIR"
+          cp "$SCREENSHOTS_DIR"/*.png "$DEST_DIR/"
+          git add "$DEST_DIR"
+          git commit -q -m "ci: screenshots from run $GITHUB_RUN_ID"
+          git push origin ci-screenshots
+
+          # Embed inline images in the response
+          BASE_URL="https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/ci-screenshots/$DEST_DIR"
+          echo "" >> /tmp/copilot_response.md
+          echo "### Screenshots" >> /tmp/copilot_response.md
+          for img in "$SCREENSHOTS_DIR"/*.png; do
+            fname=$(basename "$img")
+            echo "![$fname]($BASE_URL/$fname)" >> /tmp/copilot_response.md
+          done
 
       - name: Post Copilot response as comment
         env:
