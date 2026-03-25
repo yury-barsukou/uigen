@@ -143,14 +143,15 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           SCREENSHOTS_DIR="/tmp/playwright-screenshots"
-          if ! ls "$SCREENSHOTS_DIR"/*.png 2>/dev/null | head -1 > /dev/null; then
+
+          # Skip if no screenshots were taken
+          if ! find "$SCREENSHOTS_DIR" -maxdepth 1 -name '*.png' -print -quit 2>/dev/null | grep -q .; then
             echo "No screenshots found, skipping." >&2
             exit 0
           fi
 
-          # Push screenshots to dedicated orphan branch so they have a stable raw URL
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git config user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
 
           DEST_DIR="$GITHUB_RUN_ID"
           TMP_GIT=$(mktemp -d)
@@ -158,10 +159,12 @@ jobs:
           git init -q
           git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
 
+          # Fetch existing branch or start a new orphan
           if git fetch origin ci-screenshots --depth=1 2>/dev/null; then
             git checkout -b ci-screenshots FETCH_HEAD
           else
             git checkout --orphan ci-screenshots
+            git rm -rf . --quiet 2>/dev/null || true
           fi
 
           mkdir -p "$DEST_DIR"
@@ -170,14 +173,16 @@ jobs:
           git commit -q -m "ci: screenshots from run $GITHUB_RUN_ID"
           git push origin ci-screenshots
 
-          # Embed inline images in the response
+          # Append inline images to the response
           BASE_URL="https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/ci-screenshots/$DEST_DIR"
-          echo "" >> /tmp/copilot_response.md
-          echo "### Screenshots" >> /tmp/copilot_response.md
-          for img in "$SCREENSHOTS_DIR"/*.png; do
-            fname=$(basename "$img")
-            echo "![$fname]($BASE_URL/$fname)" >> /tmp/copilot_response.md
-          done
+          {
+            echo ""
+            echo "### Screenshots"
+            for img in "$SCREENSHOTS_DIR"/*.png; do
+              fname=$(basename "$img")
+              echo "![$fname]($BASE_URL/$fname)"
+            done
+          } >> /tmp/copilot_response.md
 
       - name: Post Copilot response as comment
         env:
