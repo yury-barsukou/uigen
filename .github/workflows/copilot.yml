@@ -144,9 +144,15 @@ jobs:
         run: |
           SCREENSHOTS_DIR="/tmp/playwright-screenshots"
 
+          # Debug: show where screenshots actually landed
+          echo "=== Contents of SCREENSHOTS_DIR ===" >&2
+          ls -la "$SCREENSHOTS_DIR" 2>&1 >&2 || echo "(directory missing)" >&2
+          echo "=== All PNG files on runner ===" >&2
+          find /tmp /home /root -name '*.png' 2>/dev/null >&2 || true
+
           # Skip if no screenshots were taken
           if ! find "$SCREENSHOTS_DIR" -maxdepth 1 -name '*.png' -print -quit 2>/dev/null | grep -q .; then
-            echo "No screenshots found, skipping." >&2
+            echo "No screenshots found in $SCREENSHOTS_DIR, skipping." >&2
             exit 0
           fi
 
