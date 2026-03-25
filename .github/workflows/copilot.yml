@@ -45,10 +45,19 @@ jobs:
       - name: Install GitHub Copilot CLI
         run: npm install -g @github/copilot
 
-      - name: Authenticate GitHub CLI with Copilot token
+      - name: Authenticate Copilot CLI with OAuth token
         env:
           COPILOT_TOKEN: ${{ secrets.COPILOT_TOKEN }}
-        run: echo "$COPILOT_TOKEN" | gh auth login --with-token
+        # COPILOT_TOKEN must be the OAuth token from your personal GitHub account
+        # that has an active Copilot subscription. Fine-grained PATs don't work.
+        #
+        # To obtain it, run this locally (after `gh auth login`):
+        #   gh auth token
+        # Copy the gho_... value and save it as a repo secret named COPILOT_TOKEN:
+        #   Settings → Secrets and variables → Actions → New repository secret
+        run: |
+          echo "$COPILOT_TOKEN" | gh auth login --with-token
+          gh auth status
 
       - name: Extract request prompt
         id: prompt
@@ -79,8 +88,11 @@ jobs:
       - name: Run GitHub Copilot CLI
         id: copilot
         env:
-          GH_TOKEN: ${{ secrets.COPILOT_TOKEN }}
-          GITHUB_TOKEN: ${{ secrets.COPILOT_TOKEN }}
+          # Clear GH_TOKEN/GITHUB_TOKEN so the copilot CLI uses the gh auth store
+          # populated above, not the Actions service-account token which lacks
+          # Copilot subscription access.
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
           COPILOT_MODEL: ${{ vars.COPILOT_MODEL || 'gpt-4.1' }}
         run: |
           # Escape prompt: replace " with \", collapse newlines/carriage returns into spaces
