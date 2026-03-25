@@ -103,7 +103,7 @@ jobs:
           GITHUB_TOKEN: ""
           COPILOT_MODEL: ${{ vars.COPILOT_MODEL || 'claude-haiku-4.5' }}
         run: |
-          SYSTEM_CONTEXT="The project is already set up with all dependencies installed. The server is already running at localhost:3000. Logs from it are being written to logs.txt. If needed you can query the db with the 'sqlite3' cli. If needed use the mcp__playwright set of tools to launch a browser and interact with the app."
+          SYSTEM_CONTEXT="The project is already set up with all dependencies installed. The server is already running at localhost:3000. Logs from it are being written to logs.txt. If needed you can query the db with the 'sqlite3' cli. If needed, use the mcp__playwright set of tools to launch a browser (already installed) and interact with the app."
 
           # Escape prompt: replace " with \", collapse newlines/carriage returns into spaces
           PROMPT=$(cat /tmp/copilot_prompt.txt | tr '\r\n' '  ' | sed 's/"/\\"/g')
