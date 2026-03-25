@@ -116,32 +116,9 @@ jobs:
 
           # Run copilot; print stderr to Actions log AND append to response on failure
           if copilot -p "$SYSTEM_CONTEXT $PROMPT" \
-              --allow-tool 'Bash(npm:*)' \
-              --allow-tool 'Bash(sqlite3*)' \
-              --allow-tool mcp__playwright__browser_click \
-              --allow-tool mcp__playwright__browser_close \
-              --allow-tool mcp__playwright__browser_console_messages \
-              --allow-tool mcp__playwright__browser_drag \
-              --allow-tool mcp__playwright__browser_evaluate \
-              --allow-tool mcp__playwright__browser_file_upload \
-              --allow-tool mcp__playwright__browser_fill_form \
-              --allow-tool mcp__playwright__browser_handle_dialog \
-              --allow-tool mcp__playwright__browser_hover \
-              --allow-tool mcp__playwright__browser_install \
-              --allow-tool mcp__playwright__browser_navigate \
-              --allow-tool mcp__playwright__browser_navigate_back \
-              --allow-tool mcp__playwright__browser_network_requests \
-              --allow-tool mcp__playwright__browser_press_key \
-              --allow-tool mcp__playwright__browser_resize \
-              --allow-tool mcp__playwright__browser_run_code \
-              --allow-tool mcp__playwright__browser_select_option \
-              --allow-tool mcp__playwright__browser_snapshot \
-              --allow-tool mcp__playwright__browser_tabs \
-              --allow-tool mcp__playwright__browser_take_screenshot \
-              --allow-tool mcp__playwright__browser_type \
-              --allow-tool mcp__playwright__browser_wait_for \
-              --additional-mcp-config "$PLAYWRIGHT_MCP_CONFIG" \
+              --allow-all-tools \
               --allow-all-paths \
+              --additional-mcp-config "$PLAYWRIGHT_MCP_CONFIG" \
               --no-ask-user \
               -s \
               --model "$COPILOT_MODEL" \
