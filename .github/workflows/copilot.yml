@@ -109,7 +109,7 @@ jobs:
           PROMPT=$(cat /tmp/copilot_prompt.txt | tr '\r\n' '  ' | sed 's/"/\\"/g')
 
           # Playwright MCP server config
-          PLAYWRIGHT_MCP_CONFIG='{"playwright":{"command":"npx","args":["@playwright/mcp@latest"]}}'
+          PLAYWRIGHT_MCP_CONFIG='{"mcpServers":{"playwright":{"command":"npx","args":["@playwright/mcp@latest"]}}}'
 
           echo "## GitHub Copilot Response" > /tmp/copilot_response.md
           echo "" >> /tmp/copilot_response.md
